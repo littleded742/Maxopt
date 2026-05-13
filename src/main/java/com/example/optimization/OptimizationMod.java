@@ -15,6 +15,7 @@ import net.minecraft.client.world.ClientChunkManager;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.mob.MobEntity;
+import net.minecraft.item.ItemStack;
 import net.minecraft.particle.ParticleEffect;
 import net.minecraft.particle.EntityEffectParticleEffect;
 import net.minecraft.util.Hand;
@@ -26,14 +27,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 public class OptimizationMod implements ModInitializer {
     public static boolean isCritHandOffsetActive = false;
-    private static int MathTicksLeft = 0;
+    private static int mathTicksLeft = 0;
 
     @Override
     public void onInitialize() {
         System.out.println("[MaxOptimize] Единый пак экстремальной оптимизации (v8) успешно запущен!");
     }
 
-    // 1. АЛГОРИТМ SODIUM: КУЛЛИНГ СКРЫТОЙ ГЕОМЕТРИИ ЧАНКОВ
     @Mixin(net.minecraft.client.render.chunk.ChunkBuilder.BuiltChunk.class)
     public static class MixinSodiumChunkCulling {
         @Inject(method = "shouldBuild", at = @At("HEAD"), cancellable = true)
@@ -45,7 +45,6 @@ public class OptimizationMod implements ModInitializer {
         }
     }
 
-    // 2. АЛГОРИТМ LITHIUM: ЗАМОРОЗКА ИИ ДАЛЕКИХ МОБОВ (>32 БЛОКОВ)
     @Mixin(MobEntity.class)
     public static class MixinLithiumAI {
         @Inject(method = "tickNewAi", at = @At("HEAD"), cancellable = true)
@@ -58,7 +57,6 @@ public class OptimizationMod implements ModInitializer {
         }
     }
 
-    // 3. АЛГОРИТМ FERRITECORE: СЖАТИЕ ПАЛИТРЫ БЛОКОВ В RAM
     @Mixin(net.minecraft.world.chunk.PalettedContainer.class)
     public static class MixinFerriteCoreRamCompression {
         @Inject(method = "get", at = @At("HEAD"))
@@ -67,7 +65,6 @@ public class OptimizationMod implements ModInitializer {
         }
     }
 
-    // 4. ТЕКСТУРЫ 2x2 (4 ПИКСЕЛЯ): КРАСИВОЕ СЖАТИЕ БЕЗ КИСЛОТНОСТИ И СЛИВАНИЯ РУД
     @Mixin(NativeImage.class)
     public static class MixinNativeImage {
         @Inject(method = "upload", at = @At("HEAD"))
@@ -116,7 +113,6 @@ public class OptimizationMod implements ModInitializer {
         }
     }
 
-    // 5. ОПТИМИЗАЦИЯ ПОТОКА ПРОГРУЗКИ ЧАНКОВ
     @Mixin(ClientChunkManager.ClientChunkMap.class)
     public static class MixinClientChunkMap {
         @Inject(method = "set", at = @At("HEAD"))
@@ -125,7 +121,6 @@ public class OptimizationMod implements ModInitializer {
         }
     }
 
-    // 6. ТРИГГЕР КРИТА И БЕЗОПАСНАЯ ОЧИСТКА RAM (РАЗ В 60 СЕК)
     @Mixin(MinecraftClient.class)
     public static class MixinMinecraftClientTracker {
         private int ramTickCounter = 0;
@@ -133,8 +128,8 @@ public class OptimizationMod implements ModInitializer {
         @Inject(method = "tick", at = @At("HEAD"))
         private void onTickTracker(CallbackInfo ci) {
             if (OptimizationMod.isCritHandOffsetActive) {
-                OptimizationMod.MathTicksLeft--;
-                if (OptimizationMod.MathTicksLeft <= 0) {
+                OptimizationMod.mathTicksLeft--;
+                if (OptimizationMod.mathTicksLeft <= 0) {
                     OptimizationMod.isCritHandOffsetActive = false;
                 }
             }
@@ -142,7 +137,7 @@ public class OptimizationMod implements ModInitializer {
             MinecraftClient client = (MinecraftClient)(Object)this;
             if (client.player != null && client.player.isCrit() && client.player.handSwinging) {
                 OptimizationMod.isCritHandOffsetActive = true;
-                OptimizationMod.MathTicksLeft = 4;
+                OptimizationMod.mathTicksLeft = 4;
             }
 
             ramTickCounter++;
@@ -153,18 +148,16 @@ public class OptimizationMod implements ModInitializer {
         }
     }
 
-    // 7. ИЗМЕНЕНИЕ ЗАМАХА МЕЧА ПРИ КРИТЕ (ВЛЕВО И ВЫШЕ)
     @Mixin(HeldItemRenderer.class)
     public static class MixinHeldItemRenderer {
         @Inject(method = "renderFirstPersonItem", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/util/math/MatrixStack;push()V", shift = At.Shift.AFTER))
-        private void onRenderFirstPersonItem(net.minecraft.client.network.AbstractClientPlayerEntity player, float tickDelta, float pitch, Hand hand, float swingProgress, net.item.ItemStack item, float equipProgress, MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light, CallbackInfo ci) {
+        private void onRenderFirstPersonItem(net.minecraft.client.network.AbstractClientPlayerEntity player, float tickDelta, float pitch, Hand hand, float swingProgress, ItemStack item, float equipProgress, MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light, CallbackInfo ci) {
             if (hand == Hand.MAIN_HAND && OptimizationMod.isCritHandOffsetActive) {
                 matrices.translate(-0.15f, 0.12f, 0.0f);
             }
         }
     }
 
-    // 8. УМНЫЙ ФИЛЬТР ЧАСТИЦ (БЛОКИРУЕМ ВСЁ, КРОМЕ ПОДСВЕЧЕННЫХ ЗЕЛИЙ)
     @Mixin(net.minecraft.client.particle.ParticleManager.class)
     public static class MixinParticleManager {
         @Inject(method = "addParticle(Lnet/minecraft/particle/ParticleEffect;DDDDDD)Lnet/minecraft/client/particle/Particle;", at = @At("HEAD"), cancellable = true)
@@ -183,7 +176,6 @@ public class OptimizationMod implements ModInitializer {
         }
     }
 
-    // 9. ПОЛНАЯ ЗАМОРОЗКА АНИМАЦИЙ ЖИДКОСТЕЙ И ТЕКСТУР БЛОКОВ
     @Mixin(SpriteContents.class)
     public static class MixinSpriteContents {
         @Inject(method = "updateAnimation", at = @At("HEAD"), cancellable = true)
@@ -192,7 +184,6 @@ public class OptimizationMod implements ModInitializer {
         }
     }
 
-    // 10. ОТКЛЮЧЕНИЕ ОБЛАКОВ
     @Mixin(net.minecraft.client.render.WorldRenderer.class)
     public static class MixinWorldRenderer {
         @Inject(method = "renderClouds", at = @At("HEAD"), cancellable = true)
@@ -201,7 +192,6 @@ public class OptimizationMod implements ModInitializer {
         }
     }
 
-    // 11. ХРАНЕНИЕ ЧАНКОВ (ЗАПРЕТ НА ВЫГРУЗКУ КЛИЕНТОМ)
     @Mixin(ClientChunkManager.class)
     public static class MixinClientChunkManager {
         @Inject(method = "unload", at = @At("HEAD"), cancellable = true)
@@ -210,7 +200,6 @@ public class OptimizationMod implements ModInitializer {
         }
     }
 
-    // 12. ПРЕВРАЩЕНИЕ 3D МОДЕЛЕЙ СУНДУКОВ В ГЛУХИЕ СТАТИЧНЫЕ КУБЫ
     @Mixin(BlockEntityRenderDispatcher.class)
     public static class MixinBlockEntityRenderer {
         @Inject(method = "render", at = @At("HEAD"), cancellable = true)
@@ -219,7 +208,6 @@ public class OptimizationMod implements ModInitializer {
         }
     }
 
-    // 13. АГРЕССИВНЫЙ КУЛЛИНГ СУЩНОСТЕЙ ДАЛЬШЕ 20 БЛОКОВ
     @Mixin(EntityRenderDispatcher.class)
     public static class MixinEntityRenderDispatcher {
         @Inject(method = "render", at = @At("HEAD"), cancellable = true)
